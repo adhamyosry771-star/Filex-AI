@@ -44,7 +44,7 @@ const App: React.FC = () => {
       const newItem: ImageItem = {
         id: crypto.randomUUID(),
         url: resultUrl,
-        prompt: prompt || "تعديل احترافي",
+        prompt: prompt || "توليد احترافي",
         timestamp: Date.now(),
         type: uploadedImage ? 'edit' : 'generation'
       };
@@ -52,7 +52,7 @@ const App: React.FC = () => {
       setPrompt('');
       setUploadedImage(null);
     } catch (err: any) {
-      setError(err.message || "حدث خطأ أثناء المعالجة.");
+      setError(err.message || "حدث خطأ غير متوقع.");
     } finally {
       setStatus(AppStatus.IDLE);
     }
@@ -73,7 +73,7 @@ const App: React.FC = () => {
           <span className="font-black text-base tracking-tighter uppercase">FILEX <span className="text-indigo-500">AI</span></span>
         </div>
         <button 
-          onClick={() => { setPrompt(''); setUploadedImage(null); setCurrentImage(null); }}
+          onClick={() => { setPrompt(''); setUploadedImage(null); setCurrentImage(null); setError(null); }}
           className="text-[9px] font-bold text-slate-600 uppercase tracking-widest hover:text-white transition-colors"
         >
           إعادة تعيين
@@ -137,7 +137,7 @@ const App: React.FC = () => {
             )}
           </aside>
 
-          {/* Canvas Area - Dynamic Width Container */}
+          {/* Canvas Area */}
           <section className="lg:col-span-9 flex flex-col items-center justify-start">
             {!currentImage ? (
               <div className="w-full aspect-[16/9] rounded-[2rem] border border-white/5 bg-slate-900/10 flex flex-col items-center justify-center text-slate-800 gap-3">
@@ -163,7 +163,7 @@ const App: React.FC = () => {
                       }}
                       className="px-8 py-3 bg-white text-black rounded-xl font-black text-[10px] active:scale-95 shadow-2xl"
                     >
-                      تحميل بدقة 8K
+                      تحميل الصورة
                     </button>
                  </div>
               </div>
@@ -172,7 +172,7 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Flexible & Consistent Floating Prompt Bar */}
+      {/* Floating Prompt Bar */}
       <div className="fixed bottom-6 left-0 right-0 px-4 z-50 flex justify-center items-end">
         <div className="w-full max-w-3xl bg-[#0d1117]/90 backdrop-blur-lg rounded-[1.8rem] p-1.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)] border border-white/10 flex items-end gap-2 transition-all duration-300">
           
@@ -195,7 +195,7 @@ const App: React.FC = () => {
               ref={textareaRef}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="صف فكرتك هنا..."
+              placeholder="اكتب وصف الصورة هنا..."
               rows={1}
               className="w-full bg-transparent border-none ring-0 focus:ring-0 text-white placeholder-slate-700 py-2.5 resize-none text-xs font-bold text-right outline-none hide-scrollbar max-h-32 overflow-y-auto"
               style={{ boxShadow: 'none' }}
@@ -209,7 +209,7 @@ const App: React.FC = () => {
               disabled={status === AppStatus.PROCESSING || (!prompt.trim() && !uploadedImage)}
               className="h-10 px-6 rounded-[1.2rem] bg-indigo-600 hover:bg-indigo-500 text-white font-black text-[10px] transition-all disabled:opacity-20 active:scale-95 shadow-lg shadow-indigo-600/20 whitespace-nowrap"
             >
-              {status === AppStatus.PROCESSING ? '...' : 'توليد'}
+              {status === AppStatus.PROCESSING ? 'جاري...' : 'توليد'}
             </button>
           </div>
         </div>

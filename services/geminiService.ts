@@ -28,22 +28,18 @@ export const generateProfessionalBackground = async (
   height: number,
   base64Image?: string
 ): Promise<string> => {
+  // استخدام مفتاح البيئة المدمج تلقائياً
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const aspectRatio = getClosestAspectRatio(width, height);
   
-  // تعليمات صارمة لضمان جودة استثنائية وتنفيذ دقيق
-  const qualityInstruction = "CRITICAL: Generate a masterpiece. Ultra-high resolution 8k, photorealistic textures, professional cinematic lighting, extremely detailed, vibrant colors, sharp focus. Strictly follow the user's description with zero distortion.";
+  const qualityInstruction = "High resolution, professional quality, detailed, cinematic lighting.";
   
-  const finalPrompt = base64Image 
-    ? `PRECISION EDIT: Faithfully transform the uploaded image according to this exact request: "${userPrompt}". Maintain high fidelity. ${qualityInstruction}`
-    : `PROFESSIONAL GENERATION: Create a detailed scene of "${userPrompt}". ${qualityInstruction}`;
-
   const contents: any = { 
-    parts: [{ text: finalPrompt }] 
+    parts: [{ text: `${userPrompt}. ${qualityInstruction}` }] 
   };
   
   if (base64Image) {
-    contents.parts.unshift({
+    contents.parts.push({
       inlineData: {
         mimeType: "image/png",
         data: base64Image.split(',')[1] || base64Image
@@ -63,11 +59,7 @@ export const generateProfessionalBackground = async (
     });
 
     const candidate = response.candidates?.[0];
-    if (!candidate) throw new Error("لم يتم استلام رد من الخادم.");
-    
-    if (candidate.finishReason === 'SAFETY') {
-      throw new Error("تم حظر الطلب لمخالفته معايير السلامة. جرب وصفاً فنياً.");
-    }
+    if (!candidate) throw new Error("لم نتمكن من الحصول على رد من النظام.");
 
     const parts = candidate.content?.parts;
     if (parts && parts.length > 0) {
@@ -77,9 +69,9 @@ export const generateProfessionalBackground = async (
         }
       }
     }
-    throw new Error("تعذر توليد الصورة. حاول تبسيط الوصف.");
+    throw new Error("لم يتم العثور على بيانات الصورة في الرد.");
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    throw error;
+    throw new Error("حدث خطأ أثناء الاتصال بالخادم. تأكد من اتصالك بالإنترنت.");
   }
 };
