@@ -1,219 +1,185 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { AppStatus, ImageItem } from './types';
-import { generateProfessionalBackground } from './services/geminiService';
-import LoadingOverlay from './components/LoadingOverlay';
+import React, { useState, useEffect, useRef } from 'react';
+import Header from './components/Header';
+import ImageDisplay from './components/ImageDisplay';
+import { editImageWithGemini } from './services/geminiService';
+import { ImageState } from './types';
 
 const App: React.FC = () => {
-  const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
+  const [state, setState] = useState<ImageState>({
+    original: null,
+    secondary: null,
+    result: null,
+    isLoading: false,
+    error: null,
+  });
+
   const [prompt, setPrompt] = useState('');
-  const [width, setWidth] = useState<number>(1080);
-  const [height, setHeight] = useState<number>(1920);
-  const [currentImage, setCurrentImage] = useState<ImageItem | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [timer, setTimer] = useState(0);
+  const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    if (state.isLoading) {
+      setTimer(0);
+      timerRef.current = window.setInterval(() => {
+        setTimer(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     }
-  }, [prompt]);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [state.isLoading]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'original' | 'secondary') => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => setUploadedImage(reader.result as string);
+      reader.onloadend = () => {
+        setState(prev => ({ 
+          ...prev, 
+          [type]: reader.result as string, 
+          result: null,
+          error: null 
+        }));
+      };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleGenerate = async () => {
-    if (!prompt.trim() && !uploadedImage) return;
-    
-    setCurrentImage(null);
-    setStatus(AppStatus.PROCESSING);
-    setError(null);
+  const handleEdit = async () => {
+    if (!state.original) {
+      setState(prev => ({ ...prev, error: "من فضلك ارفع الصورة الأساسية أولاً" }));
+      return;
+    }
+    if (!prompt.trim()) {
+      setState(prev => ({ ...prev, error: "أخبرنا ماذا تريد أن تفعل في الصورة؟" }));
+      return;
+    }
 
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
     try {
-      const resultUrl = await generateProfessionalBackground(prompt, width, height, uploadedImage || undefined);
-      const newItem: ImageItem = {
-        id: crypto.randomUUID(),
-        url: resultUrl,
-        prompt: prompt || "توليد احترافي",
-        timestamp: Date.now(),
-        type: uploadedImage ? 'edit' : 'generation'
-      };
-      setCurrentImage(newItem);
-      setPrompt('');
-      setUploadedImage(null);
+      const result = await editImageWithGemini(state.original, state.secondary, prompt);
+      setState(prev => ({ ...prev, result, isLoading: false }));
     } catch (err: any) {
-      setError(err.message || "حدث خطأ غير متوقع.");
-    } finally {
-      setStatus(AppStatus.IDLE);
+      setState(prev => ({ 
+        ...prev, 
+        isLoading: false, 
+        error: "حدث خطأ بسيط، دعنا نحاول مرة أخرى!" 
+      }));
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#020408] text-slate-200 selection:bg-indigo-500/30">
-      {status === AppStatus.PROCESSING && <LoadingOverlay />}
+    <div className="pb-20 bg-slate-50 min-h-screen">
+      <Header />
 
-      {/* Header */}
-      <nav className="w-full h-14 px-6 flex justify-between items-center border-b border-white/5 bg-[#020408]/80 backdrop-blur-xl sticky top-0 z-40">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 premium-gradient rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <span className="font-black text-base tracking-tighter uppercase">FILEX <span className="text-indigo-500">AI</span></span>
+      <main className="max-w-5xl mx-auto px-4">
+        <div className="text-center mb-12">
+          <h2 className="text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">
+            حول خيالك إلى <span className="text-indigo-600">حقيقة</span>
+          </h2>
+          <p className="text-lg text-slate-500 font-medium max-w-xl mx-auto">
+            ارفع صورتك وادمجها مع أي مشهد تريده باستخدام أقوى تقنيات العمل.
+          </p>
         </div>
-        <button 
-          onClick={() => { setPrompt(''); setUploadedImage(null); setCurrentImage(null); setError(null); }}
-          className="text-[9px] font-bold text-slate-600 uppercase tracking-widest hover:text-white transition-colors"
-        >
-          إعادة تعيين
-        </button>
-      </nav>
 
-      <main className="max-w-[1400px] mx-auto p-4 lg:p-6 pb-32">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* Sidebar */}
-          <aside className="lg:col-span-3 space-y-4">
-            <div className="glass-panel p-5 rounded-[1.5rem] border-white/5">
-              <div className="flex items-center gap-2 mb-6 text-slate-500">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
-                <h3 className="text-[10px] font-black uppercase tracking-widest">الأبعاد</h3>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-bold text-slate-600 uppercase px-1">العرض</label>
-                  <input 
-                    type="number" 
-                    value={width} 
-                    onChange={(e) => setWidth(Number(e.target.value))}
-                    className="w-full bg-slate-900/30 border border-white/5 rounded-xl px-3 py-3 text-xs font-bold text-white outline-none focus:border-indigo-500/50 transition-all"
-                  />
+        {/* Action Card */}
+        <div className="bg-white rounded-[2rem] shadow-xl shadow-slate-200 p-8 md:p-10 mb-12 border border-slate-100">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            {/* Primary Upload */}
+            <div className="space-y-3">
+              <label className="block text-sm font-bold text-slate-700 text-right pr-2 uppercase">الصورة الأساسية (الخلفية)</label>
+              <div className="relative group h-40">
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={(e) => handleFileChange(e, 'original')}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                />
+                <div className={`h-full border-2 border-dashed rounded-3xl p-6 transition-all flex flex-col items-center justify-center gap-3 ${state.original ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200 bg-slate-50 group-hover:border-indigo-400 group-hover:bg-white'}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className={`h-8 w-8 ${state.original ? 'text-indigo-600' : 'text-slate-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className={`text-sm font-bold ${state.original ? 'text-indigo-700' : 'text-slate-500'}`}>
+                    {state.original ? 'تم اختيار الخلفية' : 'ارفع الصورة الأساسية'}
+                  </span>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-bold text-slate-600 uppercase px-1">الارتفاع</label>
-                  <input 
-                    type="number" 
-                    value={height} 
-                    onChange={(e) => setHeight(Number(e.target.value))}
-                    className="w-full bg-slate-900/30 border border-white/5 rounded-xl px-3 py-3 text-xs font-bold text-white outline-none focus:border-indigo-500/50 transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-8 pt-6 border-t border-white/5 grid grid-cols-2 gap-2">
-                {[
-                  { label: '1:1', w: 1080, h: 1080 },
-                  { label: '9:16', w: 1080, h: 1920 },
-                  { label: '16:9', w: 1920, h: 1080 },
-                  { label: '4:5', w: 1080, h: 1350 }
-                ].map(p => (
-                  <button 
-                    key={p.label}
-                    onClick={() => { setWidth(p.w); setHeight(p.h); }}
-                    className={`py-2 rounded-lg text-[9px] font-black border transition-all ${width === p.w && height === p.h ? 'bg-white text-black border-white' : 'bg-transparent border-white/5 text-slate-500 hover:border-white/10'}`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
               </div>
             </div>
 
-            {error && (
-              <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-xl text-red-400 text-[9px] font-bold text-center">
-                {error}
+            {/* Secondary Upload */}
+            <div className="space-y-3">
+              <label className="block text-sm font-bold text-slate-700 text-right pr-2 uppercase">صورتك الشخصية (للدمج)</label>
+              <div className="relative group h-40">
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={(e) => handleFileChange(e, 'secondary')}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                />
+                <div className={`h-full border-2 border-dashed rounded-3xl p-6 transition-all flex flex-col items-center justify-center gap-3 ${state.secondary ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200 bg-slate-50 group-hover:border-indigo-400 group-hover:bg-white'}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className={`h-8 w-8 ${state.secondary ? 'text-indigo-600' : 'text-slate-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span className={`text-sm font-bold ${state.secondary ? 'text-indigo-700' : 'text-slate-500'}`}>
+                    {state.secondary ? 'تم اختيار صورتك الشخصية' : 'ارفع صورتك لإضافتها'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-3 text-right pr-2 uppercase tracking-wide">ما هو التعديل المطلوب؟</label>
+              <textarea 
+                placeholder={state.secondary ? "مثال: ضفني في الصورة بجانب الشخص الآخر، واجعل الإضاءة واقعية..." : "مثال: غير الخلفية لتبدو في الغابة، أو غير لون القميص..."}
+                className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none resize-none transition-all h-32 text-right font-medium"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+              />
+            </div>
+
+            {state.error && (
+              <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-bold text-right border border-red-100">
+                {state.error}
               </div>
             )}
-          </aside>
 
-          {/* Canvas Area */}
-          <section className="lg:col-span-9 flex flex-col items-center justify-start">
-            {!currentImage ? (
-              <div className="w-full aspect-[16/9] rounded-[2rem] border border-white/5 bg-slate-900/10 flex flex-col items-center justify-center text-slate-800 gap-3">
-                <svg className="w-12 h-12 opacity-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                <p className="text-[9px] font-black uppercase tracking-[0.4em] opacity-30">بانتظار المدخلات</p>
-              </div>
-            ) : (
-              <div className="relative group w-fit mx-auto rounded-[2rem] overflow-hidden bg-transparent border border-white/10 shadow-2xl max-h-[65vh]">
-                 <div className="flex justify-center items-center">
-                    <img 
-                      src={currentImage.url} 
-                      alt="Result" 
-                      className="w-auto h-auto max-h-[65vh] block object-contain transition-transform duration-1000 group-hover:scale-[1.01]" 
-                    />
-                 </div>
-                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center backdrop-blur-sm">
-                    <button 
-                      onClick={() => {
-                        const a = document.createElement('a');
-                        a.href = currentImage.url;
-                        a.download = `filex-${Date.now()}.png`;
-                        a.click();
-                      }}
-                      className="px-8 py-3 bg-white text-black rounded-xl font-black text-[10px] active:scale-95 shadow-2xl"
-                    >
-                      تحميل الصورة
-                    </button>
-                 </div>
-              </div>
-            )}
-          </section>
-        </div>
-      </main>
-
-      {/* Floating Prompt Bar */}
-      <div className="fixed bottom-6 left-0 right-0 px-4 z-50 flex justify-center items-end">
-        <div className="w-full max-w-3xl bg-[#0d1117]/90 backdrop-blur-lg rounded-[1.8rem] p-1.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)] border border-white/10 flex items-end gap-2 transition-all duration-300">
-          
-          <div className="pb-0.5 pl-1">
-            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
             <button 
-              onClick={() => fileInputRef.current?.click()}
-              className={`w-10 h-10 rounded-[1.2rem] flex items-center justify-center transition-all ${uploadedImage ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-900/50 hover:bg-slate-800 text-slate-500'}`}
+              onClick={handleEdit}
+              disabled={state.isLoading}
+              className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-200 flex items-center justify-center gap-3 ${
+                state.isLoading 
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg hover:shadow-indigo-200 active:scale-[0.98]'
+              }`}
             >
-              {uploadedImage ? (
-                <img src={uploadedImage} className="w-7 h-7 rounded-lg object-cover" />
+              {state.isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-300 border-t-indigo-600"></div>
+                  <span>جاري المعالجة... ({timer}ث)</span>
+                </>
               ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
+                <span>بدء معالجة الصورة</span>
               )}
             </button>
           </div>
-
-          <div className="flex-1 min-h-[40px] flex items-center">
-            <textarea
-              ref={textareaRef}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="اكتب وصف الصورة هنا..."
-              rows={1}
-              className="w-full bg-transparent border-none ring-0 focus:ring-0 text-white placeholder-slate-700 py-2.5 resize-none text-xs font-bold text-right outline-none hide-scrollbar max-h-32 overflow-y-auto"
-              style={{ boxShadow: 'none' }}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate(); } }}
-            />
-          </div>
-
-          <div className="pb-0.5 pr-0.5">
-            <button
-              onClick={handleGenerate}
-              disabled={status === AppStatus.PROCESSING || (!prompt.trim() && !uploadedImage)}
-              className="h-10 px-6 rounded-[1.2rem] bg-indigo-600 hover:bg-indigo-500 text-white font-black text-[10px] transition-all disabled:opacity-20 active:scale-95 shadow-lg shadow-indigo-600/20 whitespace-nowrap"
-            >
-              {status === AppStatus.PROCESSING ? 'جاري...' : 'توليد'}
-            </button>
-          </div>
         </div>
-      </div>
+
+        <ImageDisplay 
+          original={state.original} 
+          secondary={state.secondary}
+          result={state.result} 
+          isLoading={state.isLoading}
+          timer={timer}
+        />
+      </main>
     </div>
   );
 };
